@@ -78,12 +78,6 @@ python main.py
 - Low FPS: Reduce resolution (e.g., target width ~640), increase `process_every_n_frames`, or use a smaller YOLO model.
 - PyTorch/Torch install: For GPUs, install a CUDA-enabled PyTorch build matching your GPU drivers (`https://pytorch.org/get-started/locally/`).
 
-### Future Extensions (Designed for scalability)
-- Config file (YAML/JSON) for thresholds, model path, etc.
-- GUI dashboard (Tkinter or PyQt) for focus stats.
-- Pomodoro timer integration and session tracking.
 
-### License
-MIT
 
 

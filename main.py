@@ -137,23 +137,27 @@ def main() -> int:
 					if det.label == "cell phone":
 						phone_detected = True
 
-			# Rising-edge alert counting
-			if phone_detected and not last_phone_detected:
-				total = alert_counter.increment()
-				print(f"[FocusVision] ALERT: Phone detected! Total alerts: {total}")
-				
-				# Show warning image in a popup window
-				if warning_image is not None and not warning_window_open:
-					cv2.namedWindow(warning_window_name, cv2.WINDOW_NORMAL)
+			# Manage warning window based on phone detection
+			if phone_detected:
+				# Show and keep showing warning image while phone is detected
+				if warning_image is not None:
+					if not warning_window_open:
+						# First time detection - increment counter and create window
+						if not last_phone_detected:
+							total = alert_counter.increment()
+							print(f"[FocusVision] ALERT: Phone detected! Total alerts: {total}")
+						
+						cv2.namedWindow(warning_window_name, cv2.WINDOW_NORMAL)
+						cv2.setWindowProperty(warning_window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+						warning_window_open = True
+					
+					# Keep showing the image while phone is detected
 					cv2.imshow(warning_window_name, warning_image)
-					# Make it stay on top and fullscreen for maximum attention
-					cv2.setWindowProperty(warning_window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-					warning_window_open = True
-			
-			# Close warning window when phone is no longer detected
-			if not phone_detected and warning_window_open:
-				cv2.destroyWindow(warning_window_name)
-				warning_window_open = False
+			else:
+				# Close warning window immediately when phone is no longer detected
+				if warning_window_open:
+					cv2.destroyWindow(warning_window_name)
+					warning_window_open = False
 			
 			last_phone_detected = phone_detected
 

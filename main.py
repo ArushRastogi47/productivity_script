@@ -77,16 +77,20 @@ def main() -> int:
 	window_name = "FocusVision - Press 'q' to quit"
 	cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 	
-	# Load warning image
-	warning_image_path = "warning.jpg"
-	warning_image = cv2.imread(warning_image_path)
-	if warning_image is None:
-		print(f"[FocusVision] WARNING: Could not load warning image from {warning_image_path}")
+	# Load warning video with full path
+	import os
+	warning_video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "warning.mp4")
+	if not os.path.exists(warning_video_path):
+		print(f"[FocusVision] ERROR: Could not find warning video at {warning_video_path}")
+		print(f"[FocusVision] Please ensure warning.mp4 exists in the same folder as main.py")
+		return 1
 	else:
-		print(f"[FocusVision] Warning image loaded successfully")
+		print(f"[FocusVision] Warning video found: {warning_video_path}")
 	
 	warning_window_name = "⚠️ WARNING - PUT YOUR PHONE DOWN! ⚠️"
 	warning_window_open = False
+	warning_triggered = False  # Track if warning has been triggered
+	warning_video_cap = None  # Video capture for warning video
 
 	# Processing optimizations
 	process_every_n_frames = 2  # skip-rate to improve throughput
@@ -138,45 +142,75 @@ def main() -> int:
 						phone_detected = True
 
 			# Manage warning window based on phone detection
-			if phone_detected:
-				# Show and keep showing warning image while phone is detected
-				if warning_image is not None:
-					if not warning_window_open:
-						# First time detection - increment counter and create window
-						if not last_phone_detected:
-							total = alert_counter.increment()
-							print(f"[FocusVision] ALERT: Phone detected! Total alerts: {total}")
-						
-						cv2.namedWindow(warning_window_name, cv2.WINDOW_NORMAL)
-						cv2.setWindowProperty(warning_window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-						warning_window_open = True
+			if phone_detected and not warning_triggered:
+				# Show warning video when phone is first detected
+				if not warning_window_open:
+					# First time detection - increment counter and create window
+					total = alert_counter.increment()
+					print(f"[FocusVision] ALERT: Phone detected! Total alerts: {total}")
+					print(f"[FocusVision] Warning video playing! Press 'q' to dismiss and continue.")
 					
-					# Keep showing the image while phone is detected
-					cv2.imshow(warning_window_name, warning_image)
-			else:
-				# Close warning window immediately when phone is no longer detected
-				if warning_window_open:
-					cv2.destroyWindow(warning_window_name)
-					warning_window_open = False
+					# Hide the main camera window
+					cv2.destroyWindow(window_name)
+					
+					# Open warning video
+					warning_video_cap = cv2.VideoCapture(warning_video_path)
+					
+					# Create fullscreen warning window
+					cv2.namedWindow(warning_window_name, cv2.WINDOW_NORMAL)
+					cv2.setWindowProperty(warning_window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+					warning_window_open = True
+					warning_triggered = True
+			
+			# Play warning video if window is open
+			if warning_window_open and warning_video_cap is not None:
+				ret, video_frame = warning_video_cap.read()
+				if ret:
+					# Display the video frame
+					cv2.imshow(warning_window_name, video_frame)
+				else:
+					# Video ended, loop it
+					warning_video_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+					ret, video_frame = warning_video_cap.read()
+					if ret:
+						cv2.imshow(warning_window_name, video_frame)
+			elif not warning_window_open:
+				# Show main camera window when warning is not active
+				# Draw alert overlay / sound
+				frame = alert_manager.apply(frame, active=phone_detected)
+
+				# Show FPS
+				fps = fps_counter.update()
+				draw_fps(frame, fps)
+
+				# Display main window
+				cv2.imshow(window_name, frame)
 			
 			last_phone_detected = phone_detected
 
-			# Draw alert overlay / sound
-			frame = alert_manager.apply(frame, active=phone_detected)
-
-			# Show FPS
-			fps = fps_counter.update()
-			draw_fps(frame, fps)
-
-			# Display
-			cv2.imshow(window_name, frame)
+			# Check for quit key in either window
 			key = cv2.waitKey(1) & 0xFF
 			if key == ord("q"):
-				break
+				if warning_window_open:
+					# Close warning and return to camera view
+					cv2.destroyWindow(warning_window_name)
+					if warning_video_cap is not None:
+						warning_video_cap.release()
+						warning_video_cap = None
+					warning_window_open = False
+					warning_triggered = False
+					# Recreate the main camera window
+					cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+					print(f"[FocusVision] Warning dismissed. Monitoring resumed.")
+				else:
+					# Exit the program
+					break
 	except KeyboardInterrupt:
 		print("\n[FocusVision] Stopping (Ctrl+C)...")
 	finally:
 		camera.release()
+		if warning_video_cap is not None:
+			warning_video_cap.release()
 		cv2.destroyAllWindows()
 	return 0
 
